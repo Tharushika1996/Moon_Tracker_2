@@ -1,26 +1,39 @@
 version: 0.2
 
+env:
+  variables:
+    AWS_REGION: ap-southeast-1
+    ACCOUNT_ID: 576174293178
+
 phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 576174293178.dkr.ecr.ap-southeast-1.amazonaws.com
-      - REPOSITORY_URI=576174293178.dkr.ecr.ap-southeast-1.amazonaws.com/agent-service
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - if [ -z "$IMAGE_TAG" ]; then IMAGE_TAG=latest; fi
-      - echo REPOSITORY_URI=$REPOSITORY_URI
-      - echo IMAGE_TAG=$IMAGE_TAG
+
   build:
     commands:
-      - echo Building the Docker image...
-      - docker build -t $REPOSITORY_URI:$IMAGE_TAG ./agent-service
+      - |
+        for service in agent-service integration-service notification-service aggregator-service; do
+          echo "Building $service..."
+          REPO="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$service"
+          docker build -t $REPO:$IMAGE_TAG ./$service
+          docker tag $REPO:$IMAGE_TAG $REPO:latest
+        done
+
   post_build:
     commands:
-      - echo Pushing the Docker image...
-      - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - echo Writing image definitions...
-      - printf '[{"name":"agent-service","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - |
+        for service in agent-service integration-service notification-service aggregator-service; do
+          echo "Pushing $service..."
+          REPO="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$service"
+          docker push $REPO:$IMAGE_TAG
+          docker push $REPO:latest
+        done
+      - echo Done pushing all images.
 
 artifacts:
   files:
-    - imagedefinitions.json
+    - '**/*'
