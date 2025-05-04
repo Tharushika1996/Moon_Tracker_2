@@ -32,7 +32,7 @@ phases:
           docker push $REPO:$IMAGE_TAG
           docker push $REPO:latest
         done
-      - echo Done pushing all images.
+      - echo All images built and pushed successfully.
 
 artifacts:
   files:
